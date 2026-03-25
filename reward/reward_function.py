@@ -1,22 +1,55 @@
-import config
 import numpy as np
+import config
 
-def compute_reward(users, sinr):
 
-    reward = 0
+def compute_reward(users, assignments, sinrs, throughputs, latencies):
 
-    # normalize SINR
-    sinr_norm = max(0, sinr) / 30
+    num_uavs = config.NUM_UAVS
+    uav_rewards = np.zeros(num_uavs)
 
-    for u in users:
+    # ===== NORMALIZATION CONSTANTS (IMPORTANT) =====
+    SINR_SCALE = 20.0        # dB scaling
+    THROUGHPUT_SCALE = 50.0  # Mbps scale (adjust if needed)
+    LATENCY_SCALE = 0.05     # seconds (important)
 
-        if u.type == "rescue":
-            reward += config.W_RESCUE * sinr_norm
+    for i, user in enumerate(users):
 
-        elif u.type == "victim":
-            reward += config.W_VICTIM * sinr_norm
+        uav_id = assignments[i]
 
+        sinr = sinrs[i]
+        throughput = throughputs[i]
+        latency = latencies[i]
+
+        # ===== SMOOTH & SENSITIVE TERMS =====
+        sinr_term = np.tanh(sinr / SINR_SCALE)
+        throughput_term = np.tanh(throughput / THROUGHPUT_SCALE)
+
+        # latency should penalize strongly but smoothly
+        latency_term = -np.tanh(latency / LATENCY_SCALE)
+
+        # ===== PRIORITY WEIGHTS =====
+        if user.type == "rescue":
+            w = 3.0
+        elif user.type == "victim":
+            w = 2.0
         else:
-            reward += config.W_CIVILIAN * sinr_norm
+            w = 1.0
 
-    return reward
+        # ===== BALANCED QoS =====
+        qos = (
+            0.5 * sinr_term +
+            0.3 * throughput_term +
+            0.2 * latency_term
+        )
+
+        uav_rewards[uav_id] += w * qos
+
+    # ===== NORMALIZE PER UAV (VERY IMPORTANT) =====
+    users_per_uav = len(users) / num_uavs
+    uav_rewards = uav_rewards / (users_per_uav + 1e-6)
+
+    # ===== FINAL STABILIZATION =====
+    # keep rewards in reasonable range (-5 to +5 approx)
+    uav_rewards = np.clip(uav_rewards, -5, 5)
+
+    return uav_rewards

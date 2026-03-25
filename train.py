@@ -6,39 +6,57 @@ from envi.environment import UAVEnvironment
 from marl.mappo import MAPPO
 from reward.reward_function import compute_reward
 
+env = UAVEnvironment()
+agent = MAPPO(config.STATE_DIM, config.ACTION_DIM)
 
-env=UAVEnvironment()
-
-agent=MAPPO(config.STATE_DIM,config.ACTION_DIM)
-
-episodes=200
-
+episodes = 200
 
 for ep in range(episodes):
 
-    states=[]
-    rewards=[]
+    states = []
+    global_states = []
+    actions_list = []
+    log_probs_list = []
+    rewards = []
 
     for step in range(config.MAX_STEPS):
 
-        state=env.get_state()
+        states_per_uav = env.get_state()   # (num_uavs, state_dim)
+        global_state = env.get_global_state()
 
-        action=agent.select_action(state)
+        actions = []
+        log_probs = []
 
-    actions = []
+        for i in range(config.NUM_UAVS):
+            action, log_prob = agent.select_action(states_per_uav[i])
+            actions.append(action)
+            log_probs.append(log_prob)
 
-    for i in range(config.NUM_UAVS):
-        a = agent.select_action(state)
-        actions.append(a)
-        sinr=env.step(actions)
+        sinrs, throughputs, latencies, assignments = env.step(actions)
 
-        reward=compute_reward(env.users,sinr)
+        reward = compute_reward(
+            env.users,
+            assignments,
+            sinrs,
+            throughputs,
+            latencies
+        )
 
-        states.append(state)
+       
+        # ===== store =====
+        states.append(states_per_uav)
+        global_states.append(global_state)
+        actions_list.append(np.array(actions))
+        log_probs_list.append(torch.stack(log_probs))
         rewards.append(reward)
 
-    agent.update(states,rewards)
+    agent.update(states, actions_list, log_probs_list, rewards, global_states)
 
-    print("Episode",ep,"Reward",sum(rewards))
-    if ep  == 199:
-        torch.save(agent.actor.state_dict(), f"saved_models/mappo_actor_ep{ep}.pth")
+    avg_rewards = np.mean(rewards, axis=0)
+
+    print(f"Episode {ep}")
+    print("  Per UAV:", avg_rewards)
+    print("  Mean:", np.mean(avg_rewards))
+
+    if ep == 198:
+        torch.save(agent.actor.state_dict(), f"saved_models/final_actor.pth")

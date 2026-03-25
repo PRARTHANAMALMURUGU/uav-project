@@ -1,3 +1,4 @@
+## visualize3d.py
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -15,7 +16,7 @@ env = UAVEnvironment()
 agent = MAPPO(config.STATE_DIM, config.ACTION_DIM)
 
 agent.actor.load_state_dict(
-    torch.load("saved_models/mappo_actor_ep199.pth", map_location=config.DEVICE)
+    torch.load("saved_models/mappo_actor_ep150.pth", map_location=config.DEVICE)
 )
 
 agent.actor.eval()
@@ -33,11 +34,14 @@ for step in range(100):
 
     state = env.get_state()
 
-    action = agent.select_action(state)
+    action,_ = agent.select_action(state)
 
-    actions = [action for _ in range(config.NUM_UAVS)]
+    actions = []
 
-    sinr = env.step(actions)
+    for _ in range(config.NUM_UAVS):
+        a, _ = agent.select_action(state)
+        actions.append(a)
+    sinr, throughput, latency = env.step(actions)
 
     ax.clear()
 
