@@ -9,7 +9,7 @@ from reward.reward_function import compute_reward
 env = UAVEnvironment()
 agent = MAPPO(config.STATE_DIM, config.ACTION_DIM)
 
-episodes = 200
+episodes = 1000
 
 for ep in range(episodes):
 
@@ -58,5 +58,5 @@ for ep in range(episodes):
     print("  Per UAV:", avg_rewards)
     print("  Mean:", np.mean(avg_rewards))
 
-    if ep == 198:
+    if ep == episodes-1:
         torch.save(agent.actor.state_dict(), f"saved_models/final_actor.pth")
